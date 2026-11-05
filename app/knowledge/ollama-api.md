@@ -40,9 +40,24 @@ Przy `stream: false` serwer zwraca jeden obiekt JSON. Tekst odpowiedzi znajduje 
 
 Przy `stream: true` odpowiedź jest strumieniem obiektów JSON zakończonych znakiem nowej linii. Kolejne fragmenty tekstu również znajdują się w `message.content`.
 
+## Embeddingi
+
+Embedding zamienia tekst na wektor liczb, który reprezentuje jego znaczenie. Wektory pytań i fragmentów dokumentacji można porównać, aby wyszukiwać treści podobne semantycznie, nawet jeśli używają innych słów.
+
+Endpoint `POST /api/embed` przyjmuje tekst lub tablicę tekstów w polu `input`:
+
+```json
+{
+	"model": "nomic-embed-text",
+	"input": ["search_query: Jak działa API Ollama?", "search_document: Ollama udostępnia lokalne API HTTP."]
+}
+```
+
+Odpowiedź zawiera wektory w tablicy `embeddings`. W tym projekcie embeddingi fragmentów są zapisywane w `app/data/vectors.json` i przeliczane, gdy zmieni się treść fragmentu lub model.
+
 ## Konfiguracja aplikacji
 
-Endpoint RAG korzysta z `OLLAMA_BASE_URL` i `OLLAMA_MODEL`. Jeśli zmienne nie są ustawione, używa adresu `http://localhost:11434` oraz modelu `gemma4:e2b`.
+Endpoint RAG korzysta z `OLLAMA_BASE_URL` i `OLLAMA_MODEL` dla czatu oraz `OLLAMA_EMBEDDING_MODEL` dla embeddingów. Domyślnie używa adresu `http://localhost:11434`, modelu czatu `gemma4:e2b` i modelu embeddingowego `nomic-embed-text`.
 
 Model musi być dostępny lokalnie w Ollama. Można go pobrać poleceniem:
 

@@ -15,7 +15,15 @@ export async function POST(req: Request) {
         );
     }
 
-    const chunks = await searchKnowledge(question);
+    let chunks: Awaited<ReturnType<typeof searchKnowledge>>;
+    try {
+        chunks = await searchKnowledge(question, 3, req.signal);
+    } catch (error) {
+        return Response.json(
+            { error: error instanceof Error ? error.message : 'Nie udało się wyszukać dokumentacji.' },
+            { status: 502 },
+        );
+    }
 
     if (chunks.length === 0) {
         return Response.json({
