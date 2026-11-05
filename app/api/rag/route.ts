@@ -51,6 +51,10 @@ export async function POST(req: Request) {
                             KONTEKST:
                             ${context}`,
                     },
+                    {
+                        role: 'user',
+                        content: question,
+                    },
                 ],
                 stream: false,
             }),

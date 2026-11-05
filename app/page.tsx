@@ -8,6 +8,23 @@ type Source = {
 	source: string;
 };
 
+type SourceGroup = {
+	source: string;
+	titles: string[];
+};
+
+function groupSources(sources: Source[]): SourceGroup[] {
+	const groups = new Map<string, SourceGroup>();
+
+	for (const source of sources) {
+		const group = groups.get(source.source) ?? { source: source.source, titles: [] };
+		group.titles.push(source.title.replace(/^#+\s*/, ''));
+		groups.set(source.source, group);
+	}
+
+	return [...groups.values()];
+}
+
 type Message = {
 	role: 'user' | 'assistant';
 	content: string;
@@ -170,10 +187,11 @@ export default function Home() {
 											{message.sources?.length ? (
 												<div className="source-list" aria-label="Źródła odpowiedzi">
 													<span className="source-heading">ŹRÓDŁA</span>
-													{message.sources.map((source) => (
-														<span className="source-chip" key={source.id} title={source.source}>
-															{source.title.replace(/^#+\s*/, '')}
-														</span>
+													{groupSources(message.sources).map((sourceGroup) => (
+														<div className="source-chip" key={sourceGroup.source}>
+															<span className="source-file">{sourceGroup.source}:</span>
+															<span className="source-sections">{sourceGroup.titles.join('; ')}</span>
+														</div>
 													))}
 												</div>
 											) : null}
