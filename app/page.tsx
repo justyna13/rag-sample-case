@@ -37,6 +37,11 @@ type RagResponse = {
 	error?: string;
 };
 
+type OllamaChunk = {
+	error?: string;
+	message?: { content?: string };
+};
+
 const suggestions = [
 	'Jak działają hooki useState i useEffect?',
 	'Jak zbudować aplikację Next.js?',
@@ -85,28 +90,92 @@ export default function Home() {
 				signal: controller.signal,
 			});
 
-			const result = (await response.json()) as RagResponse;
-			if (!response.ok) throw new Error(result.error ?? 'Nie udało się uzyskać odpowiedzi.');
+			const contentType = response.headers.get('content-type') ?? '';
+			if (contentType.includes('application/json')) {
+				const result = (await response.json()) as RagResponse;
+				if (!response.ok) throw new Error(result.error ?? 'Nie udało się uzyskać odpowiedzi.');
 
+				setMessages((current) => {
+					const updated = [...current];
+					const lastMessage = updated[updated.length - 1];
+					if (lastMessage?.role === 'assistant') {
+						updated[updated.length - 1] = {
+							...lastMessage,
+							content: result.answer ?? 'Nie otrzymano odpowiedzi.',
+							sources: result.sources ?? [],
+						};
+					}
+					return updated;
+				});
+				return;
+			}
+
+			if (!response.ok) throw new Error('Nie udało się uzyskać odpowiedzi.');
+			if (!response.body) throw new Error('Brak strumienia odpowiedzi.');
+
+			const encodedSources = response.headers.get('X-RAG-Sources');
+			const sources = encodedSources
+				? (JSON.parse(decodeURIComponent(encodedSources)) as Source[])
+				: [];
 			setMessages((current) => {
 				const updated = [...current];
 				const lastMessage = updated[updated.length - 1];
 				if (lastMessage?.role === 'assistant') {
-					updated[updated.length - 1] = {
-						...lastMessage,
-						content: result.answer ?? 'Nie otrzymano odpowiedzi.',
-						sources: result.sources ?? [],
-					};
+					updated[updated.length - 1] = { ...lastMessage, sources };
 				}
 				return updated;
 			});
+
+			const reader = response.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = '';
+
+			const appendChunk = (line: string) => {
+				if (!line.trim()) return;
+
+				const chunk = JSON.parse(line) as OllamaChunk;
+				if (chunk.error) throw new Error(chunk.error);
+				if (!chunk.message?.content) return;
+
+				setMessages((current) => {
+					const updated = [...current];
+					const lastMessage = updated[updated.length - 1];
+					if (lastMessage?.role === 'assistant') {
+						updated[updated.length - 1] = {
+							...lastMessage,
+							content: lastMessage.content + chunk.message.content,
+						};
+					}
+					return updated;
+				});
+			};
+
+			try {
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+
+					buffer += decoder.decode(value, { stream: true });
+					const lines = buffer.split('\n');
+					buffer = lines.pop() ?? '';
+					lines.forEach(appendChunk);
+				}
+
+				buffer += decoder.decode();
+				appendChunk(buffer);
+			} finally {
+				reader.releaseLock();
+			}
 		} catch (caughtError) {
 			if (caughtError instanceof Error && caughtError.name === 'AbortError') {
 				setMessages((current) => {
 					const updated = [...current];
 					const lastMessage = updated[updated.length - 1];
-					if (lastMessage?.role === 'assistant' && !lastMessage.content) {
-						updated[updated.length - 1] = { ...lastMessage, content: 'Zapytanie zatrzymane.' };
+					if (lastMessage?.role === 'assistant') {
+						const stoppedContent = lastMessage.content
+							? `${lastMessage.content}\n\nGenerowanie zatrzymane.`
+							: 'Generowanie zatrzymane.';
+						updated[updated.length - 1] = { ...lastMessage, content: stoppedContent };
 					}
 					return updated;
 				});

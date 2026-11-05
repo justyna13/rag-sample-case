@@ -30,6 +30,12 @@ export async function POST(req: Request) {
         `[${index + 1}] ${chunk.title}\n${chunk.content}`,
     )
     .join('\n\n');
+        const sources = chunks.map((chunk) => ({
+                id: chunk.id,
+                title: chunk.title,
+                source: chunk.source,
+                score: chunk.score,
+        }));
 
     let response: Response;
     try {
@@ -56,8 +62,9 @@ export async function POST(req: Request) {
                         content: question,
                     },
                 ],
-                stream: false,
+                stream: true,
             }),
+            signal: req.signal,
         });
     } catch {
         return Response.json(
@@ -73,15 +80,13 @@ export async function POST(req: Request) {
         );
     }
 
-    const data = await response.json();
+    const headers = new Headers({
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+    });
+    headers.set('X-RAG-Sources', encodeURIComponent(JSON.stringify(sources)));
 
-    return Response.json({
-        answer: data.message.content,
-        sources: chunks.map((chunk) => ({
-            id: chunk.id,
-            title: chunk.title,
-            source: chunk.source,
-            score: chunk.score,
-        })),
+    return new Response(response.body, {
+        headers,
     });
 }
